@@ -22,21 +22,22 @@ Then add a tool to `mise.toml`:
 [settings]
 experimental = true
 
-[tools."buildkite-packages:README.md"]
-version = "0.0.0"
+[tools."buildkite-packages:mise-smoke"]
+version = "1.0.0"
 organization = "buildkite"
-registry = "test-files"
-filename = "README.md"
+registry = "mise-buildkite-packages-test"
+extension = "txt"
 ```
 
 ```sh
-mise ls-remote buildkite-packages:README.md
-mise install buildkite-packages:README.md@0.0.0
+mise ls-remote buildkite-packages:mise-smoke
+mise install buildkite-packages:mise-smoke@1.0.0
 ```
 
-The example uses the existing `buildkite/test-files` test registry. The package
-is a text file rather than a runnable tool, but it exercises authenticated
-version listing and downloading.
+The example uses the `buildkite/mise-buildkite-packages-test` registry, which
+holds this plugin's test fixtures and is readable by Buildkite staff. The
+package is a text file rather than a runnable tool, but it exercises
+authenticated version listing and downloading.
 
 ## Configure a tool
 
@@ -154,8 +155,8 @@ or a configurable non-GitHub bootstrap source as well.
 ## Development
 
 The smoke test uses an isolated mise data/config/cache/state directory and the
-`buildkite/test-files` registry. It authenticates with the token environment
-variables above or the local `bk` CLI:
+`buildkite/mise-buildkite-packages-test` registry. It authenticates with the
+token environment variables above or the local `bk` CLI:
 
 ```sh
 mise run test
@@ -165,7 +166,7 @@ CI runs the same task in the public
 [mise-buildkite-packages](https://buildkite.com/buildkite/mise-buildkite-packages)
 pipeline on the Open Source cluster. It configures no credentials: inside a
 Buildkite job the plugin exchanges an agent OIDC token for registry access, so
-`buildkite/test-files` carries a `read_packages` OIDC policy for this pipeline.
+the fixture registry carries a `read_packages` OIDC policy for this pipeline.
 Builds from forks start with a block step, because a fork's pull request can
 rewrite these steps and so mint that token.
 

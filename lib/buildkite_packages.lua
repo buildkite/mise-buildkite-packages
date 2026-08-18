@@ -273,10 +273,7 @@ function M.find_package(ctx)
 end
 
 function M.download(config, filename, destination)
-    -- reqwest adds the source URL as Referer when following the download
-    -- redirect. The query suffix avoids an AWS LFI_HEADER false positive for
-    -- filenames such as README.md and is ignored by the Files endpoint.
-    local url = config.audience .. "/files/" .. url_encode(filename) .. "?source=mise"
+    local url = config.audience .. "/files/" .. url_encode(filename)
     http.download_file({
         url = url,
         headers = request_headers(config, "application/octet-stream"),

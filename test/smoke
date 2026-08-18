@@ -19,20 +19,21 @@ cat >"$test_root/mise.toml" <<'EOF'
 [settings]
 experimental = true
 
-[tools."buildkite-packages:README.md"]
-version = "0.0.0"
+# The fixtures follow the registry's {BASENAME}-{SEMVER}.{EXT} convention, so
+# this exercises the extension option that real tools are configured with.
+[tools."buildkite-packages:mise-smoke"]
+version = "1.0.0"
 organization = "buildkite"
-registry = "test-files"
-package = "README.md"
-filename = "{package}"
+registry = "mise-buildkite-packages-test"
+extension = "txt"
 
 # The percent sign verifies placeholder replacements are treated literally.
-[tools."buildkite-packages:README%mismatch"]
-version = "0.0.0"
+[tools."buildkite-packages:mise-smoke%mismatch"]
+version = "1.0.0"
 organization = "buildkite"
-registry = "test-files"
-package = "README.md"
-filename = "{package}"
+registry = "mise-buildkite-packages-test"
+package = "mise-smoke"
+extension = "txt"
 bin = "{tool}"
 EOF
 
@@ -43,14 +44,15 @@ export MISE_STATE_DIR="$test_root/state"
 export MISE_TRUSTED_CONFIG_PATHS="$test_root"
 
 mise -C "$test_root" plugins link --force buildkite-packages "$repo_root"
-versions="$(mise -C "$test_root" ls-remote buildkite-packages:README.md)"
-[[ "$versions" == "0.0.0" ]]
+versions="$(mise -C "$test_root" ls-remote buildkite-packages:mise-smoke)"
+[[ "$versions" == "1.0.0
+1.1.0" ]]
 
-mise -C "$test_root" install --yes buildkite-packages:README.md@0.0.0
-installed="$(mise -C "$test_root" where buildkite-packages:README.md@0.0.0)"
-[[ "$(cat "$installed/bin/README.md")" == "Hello, world!" ]]
-[[ -x "$installed/bin/README.md" ]]
-[[ "$(mise -C "$test_root" which README.md)" == "$installed/bin/README.md" ]]
+mise -C "$test_root" install --yes buildkite-packages:mise-smoke@1.0.0
+installed="$(mise -C "$test_root" where buildkite-packages:mise-smoke@1.0.0)"
+[[ "$(cat "$installed/bin/mise-smoke")" == "mise-smoke 1.0.0" ]]
+[[ -x "$installed/bin/mise-smoke" ]]
+[[ "$(mise -C "$test_root" which mise-smoke)" == "$installed/bin/mise-smoke" ]]
 
 # A failed digest check must not create the final executable.
 fake_hash_bin="$test_root/fake-hash-bin"
@@ -64,13 +66,13 @@ EOF
 done
 
 if mismatch_output="$(
-  PATH="$fake_hash_bin:$PATH" mise -C "$test_root" install --yes 'buildkite-packages:README%mismatch@0.0.0' 2>&1
+  PATH="$fake_hash_bin:$PATH" mise -C "$test_root" install --yes 'buildkite-packages:mise-smoke%mismatch@1.0.0' 2>&1
 )"; then
   echo "expected installation with a mismatched SHA-256 digest to fail" >&2
   exit 1
 fi
 [[ "$mismatch_output" == *"SHA-256 digest did not match"* ]]
-if find "$MISE_DATA_DIR/installs" -type f -name 'README%mismatch' -print -quit | grep -q .; then
+if find "$MISE_DATA_DIR/installs" -type f -name 'mise-smoke%mismatch' -print -quit | grep -q .; then
   echo "unverified download was moved to its final executable path" >&2
   exit 1
 fi
