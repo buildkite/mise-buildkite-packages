@@ -19,21 +19,42 @@ cat >"$test_root/mise.toml" <<'EOF'
 [settings]
 experimental = true
 
-# The fixtures follow the registry's {BASENAME}-{SEMVER}.{EXT} convention, so
-# this exercises the extension option that real tools are configured with.
+# No extension: the filename comes from the variant the registry reports.
 [tools."buildkite-packages:mise-smoke"]
 version = "1.0.0"
 organization = "buildkite"
 registry = "mise-buildkite-packages-test"
-extension = "txt"
 
-# The percent sign verifies placeholder replacements are treated literally.
+# The percent sign verifies placeholder replacements are treated literally, and
+# the explicit extension exercises selecting a variant.
 [tools."buildkite-packages:mise-smoke%mismatch"]
 version = "1.0.0"
 organization = "buildkite"
 registry = "mise-buildkite-packages-test"
 package = "mise-smoke"
 extension = "txt"
+bin = "{tool}"
+
+# An exact filename names a variant on its own, so it needs no extension.
+[tools."buildkite-packages:mise-smoke-named"]
+version = "1.0.0"
+organization = "buildkite"
+registry = "mise-buildkite-packages-test"
+package = "mise-smoke"
+filename = "{package}-{version}.txt"
+bin = "mise-smoke-named"
+EOF
+
+# Kept in its own directory so its resolution failure does not warn on every
+# other mise invocation.
+mkdir -p "$test_root/absent"
+cat >"$test_root/absent/mise.toml" <<'EOF'
+[tools."buildkite-packages:mise-smoke%absent"]
+version = "1.0.0"
+organization = "buildkite"
+registry = "mise-buildkite-packages-test"
+package = "mise-smoke"
+extension = "zip"
 bin = "{tool}"
 EOF
 
@@ -45,14 +66,19 @@ export MISE_TRUSTED_CONFIG_PATHS="$test_root"
 
 mise -C "$test_root" plugins link --force buildkite-packages "$repo_root"
 versions="$(mise -C "$test_root" ls-remote buildkite-packages:mise-smoke)"
-[[ "$versions" == "1.0.0
-1.1.0" ]]
+# Tolerates fixtures added later, but both known versions must be listed in
+# ascending order.
+[[ "$(grep -Fx -e 1.0.0 -e 1.1.0 <<<"$versions" | tr '\n' ' ')" == "1.0.0 1.1.0 " ]]
 
 mise -C "$test_root" install --yes buildkite-packages:mise-smoke@1.0.0
 installed="$(mise -C "$test_root" where buildkite-packages:mise-smoke@1.0.0)"
 [[ "$(cat "$installed/bin/mise-smoke")" == "mise-smoke 1.0.0" ]]
 [[ -x "$installed/bin/mise-smoke" ]]
 [[ "$(mise -C "$test_root" which mise-smoke)" == "$installed/bin/mise-smoke" ]]
+
+mise -C "$test_root" install --yes buildkite-packages:mise-smoke-named@1.0.0
+named="$(mise -C "$test_root" where buildkite-packages:mise-smoke-named@1.0.0)"
+[[ "$(cat "$named/bin/mise-smoke-named")" == "mise-smoke 1.0.0" ]]
 
 # A failed digest check must not create the final executable.
 fake_hash_bin="$test_root/fake-hash-bin"
@@ -76,5 +102,16 @@ if find "$MISE_DATA_DIR/installs" -type f -name 'mise-smoke%mismatch' -print -qu
   echo "unverified download was moved to its final executable path" >&2
   exit 1
 fi
+
+# Selecting a variant that does not exist must say so, rather than download the
+# published file and report it as a digest mismatch.
+if absent_output="$(
+  mise -C "$test_root/absent" install --yes 'buildkite-packages:mise-smoke%absent@1.0.0' 2>&1
+)"; then
+  echo "expected installation of an unpublished variant to fail" >&2
+  exit 1
+fi
+[[ "$absent_output" == *"with extension zip"* ]]
+[[ "$absent_output" != *"SHA-256"* ]]
 
 echo "smoke test passed"

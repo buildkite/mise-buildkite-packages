@@ -13,7 +13,7 @@ function PLUGIN:BackendInstall(ctx)
     local packages = dofile(RUNTIME.pluginDirPath .. "/lib/buildkite_packages.lua")
 
     local pkg, config = packages.find_package(ctx)
-    local filename = packages.filename(ctx, config)
+    local filename = packages.filename(ctx, config, pkg)
     local extract = config.extract
     if extract == nil then
         extract = archive_name(filename) ~= nil

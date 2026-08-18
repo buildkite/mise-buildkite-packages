@@ -22,43 +22,46 @@ Then add a tool to `mise.toml`:
 [settings]
 experimental = true
 
-[tools."buildkite-packages:mise-smoke"]
-version = "1.0.0"
+[tools."buildkite-packages:bktec"]
+version = "3.0.0"
 organization = "buildkite"
-registry = "mise-buildkite-packages-test"
-extension = "txt"
+registry = "bktec"
+package = "bktec-{os}-{arch}"
+bin = "bktec"
 ```
 
 ```sh
-mise ls-remote buildkite-packages:mise-smoke
-mise install buildkite-packages:mise-smoke@1.0.0
+mise ls-remote buildkite-packages:bktec
+mise install buildkite-packages:bktec@3.0.0
+mise exec buildkite-packages:bktec@3.0.0 -- bktec --version
 ```
 
-The example uses the `buildkite/mise-buildkite-packages-test` registry, which
-holds this plugin's test fixtures and is readable by Buildkite staff. The
-package is a text file rather than a runnable tool, but it exercises
-authenticated version listing and downloading.
+The example installs the Test Engine client from the public
+[`buildkite/bktec`](https://buildkite.com/organizations/buildkite/packages/registries/bktec)
+registry. The registry is public, but listing versions goes through the REST
+API, which always needs a token — see [Authentication](#authentication).
 
 ## Configure a tool
 
 Buildkite Files package names and versions are parsed from filenames of the
 form `{BASENAME}-{SEMVER}.{EXT}`. For platform-specific tools, put the platform
-in the basename and publish one package per platform. For example:
+in the basename and publish one package per platform, as `buildkite/bktec`
+does:
 
 ```text
 bktec-darwin-arm64-3.0.0.bin
 bktec-linux-amd64-3.0.0.bin
+bktec-windows-amd64-3.0.0.exe
 ```
 
-Configure the logical mise tool with a package name template:
+A package name template collapses those into one logical mise tool:
 
 ```toml
 [tools."buildkite-packages:bktec"]
 version = "3.0.0"
 organization = "buildkite"
-registry = "test-engine-client-files"
+registry = "bktec"
 package = "bktec-{os}-{arch}"
-extension = "{exe_ext}"
 bin = "bktec"
 ```
 
@@ -66,24 +69,60 @@ bin = "bktec"
 and `{arch}` use mise's runtime names, such as `darwin`, `linux`, `arm64`, and
 `amd64`. `{exe_ext}` is `exe` on Windows and `bin` elsewhere.
 
+Note that the example above sets no extension. The registry records each
+published file's extension as the package's *variant* and returns it from the
+API, so the plugin reconstructs `bktec-darwin-arm64-3.0.0.bin` on macOS and
+`bktec-windows-amd64-3.0.0.exe` on Windows without being told which is which.
+
 Available options:
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `organization` | `$BUILDKITE_ORGANIZATION_SLUG` | Buildkite organization slug |
 | `registry` | `$BUILDKITE_PACKAGES_REGISTRY` | Files registry slug |
-| `package` | mise tool name | Files package name; supports platform placeholders |
-| `filename` | none | Exact filename; supports all placeholders below plus `{package}` and `{version}` |
-| `extension` | none | Build the filename as `{package}-{version}.{extension}`; supports `{tool}`, `{os}`, `{arch}`, and `{exe_ext}` |
+| `package` | mise tool name | Files package name; supports `{tool}`, `{os}`, `{arch}`, and `{exe_ext}` |
+| `extension` | the package's variant | Select one variant when a version has several; supports the same placeholders as `package` |
+| `filename` | derived from the variant | Exact filename, which also selects a variant; supports the same placeholders plus `{package}` and `{version}` |
 | `bin` | mise tool name | Installed name for a raw executable |
 | `extract` | inferred from extension | Force or disable archive extraction |
 | `strip_components` | `0` | Strip zero or one leading archive path component |
 
 Raw files are installed as `bin/<bin>` and made executable. Archives are
 extracted into the tool installation directory; both that directory and its
-`bin` child are added to `PATH`. One of `filename` or `extension` is required;
-`extension` is the concise choice for files following the registry's current
-semver filename convention.
+`bin` child are added to `PATH`.
+
+### Choosing between variants
+
+A Files package is identified by its name, version *and* variant, so one
+version can be published in several formats. Publishing a detached checksum
+next to a binary produces exactly that:
+
+```text
+bktec-linux-amd64-3.0.0.bin           variant "bin"
+bktec-linux-amd64-3.0.0.bin.sha256    variant "bin.sha256"
+```
+
+The plugin will not guess between them. It fails with the available variants
+listed, and `extension` picks one:
+
+```toml
+extension = "bin"
+```
+
+An exact `filename` selects a variant too, since it already names one of the
+published files, so it does not need an `extension` alongside it.
+
+Set one of the two up front if a registry publishes more than one format per
+version. Leaving both out is the concise choice, but it resolves against
+whatever the registry holds at install time, so publishing a second variant
+later turns a working configuration into that error.
+
+`extension` additionally narrows `ls-remote` to versions published in that
+format. `filename` cannot: listing has no version to expand `{version}`
+against.
+
+Legacy Packagecloud-backed Files registries report no variant at all. There,
+`filename` or `extension` is required, and the plugin says so.
 
 ## Authentication
 
