@@ -82,7 +82,7 @@ Available options:
 | `registry` | `$BUILDKITE_PACKAGES_REGISTRY` | Files registry slug |
 | `package` | mise tool name | Files package name; supports `{tool}`, `{os}`, `{arch}`, and `{exe_ext}` |
 | `extension` | the package's variant | Select one variant when a version has several; supports the same placeholders as `package` |
-| `filename` | derived from the variant | Exact filename; supports the same placeholders plus `{package}` and `{version}` |
+| `filename` | derived from the variant | Exact filename, which also selects a variant; supports the same placeholders plus `{package}` and `{version}` |
 | `bin` | mise tool name | Installed name for a raw executable |
 | `extract` | inferred from extension | Force or disable archive extraction |
 | `strip_components` | `0` | Strip zero or one leading archive path component |
@@ -109,10 +109,17 @@ listed, and `extension` picks one:
 extension = "bin"
 ```
 
-Set `extension` up front if a registry publishes more than one format per
-version. Leaving it out is the concise choice, but it resolves against whatever
-the registry holds at install time, so publishing a second variant later turns
-a working configuration into that error.
+An exact `filename` selects a variant too, since it already names one of the
+published files, so it does not need an `extension` alongside it.
+
+Set one of the two up front if a registry publishes more than one format per
+version. Leaving both out is the concise choice, but it resolves against
+whatever the registry holds at install time, so publishing a second variant
+later turns a working configuration into that error.
+
+`extension` additionally narrows `ls-remote` to versions published in that
+format. `filename` cannot: listing has no version to expand `{version}`
+against.
 
 Legacy Packagecloud-backed Files registries report no variant at all. There,
 `filename` or `extension` is required, and the plugin says so.

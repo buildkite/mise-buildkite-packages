@@ -34,6 +34,15 @@ registry = "mise-buildkite-packages-test"
 package = "mise-smoke"
 extension = "txt"
 bin = "{tool}"
+
+# An exact filename names a variant on its own, so it needs no extension.
+[tools."buildkite-packages:mise-smoke-named"]
+version = "1.0.0"
+organization = "buildkite"
+registry = "mise-buildkite-packages-test"
+package = "mise-smoke"
+filename = "{package}-{version}.txt"
+bin = "mise-smoke-named"
 EOF
 
 # Kept in its own directory so its resolution failure does not warn on every
@@ -66,6 +75,10 @@ installed="$(mise -C "$test_root" where buildkite-packages:mise-smoke@1.0.0)"
 [[ "$(cat "$installed/bin/mise-smoke")" == "mise-smoke 1.0.0" ]]
 [[ -x "$installed/bin/mise-smoke" ]]
 [[ "$(mise -C "$test_root" which mise-smoke)" == "$installed/bin/mise-smoke" ]]
+
+mise -C "$test_root" install --yes buildkite-packages:mise-smoke-named@1.0.0
+named="$(mise -C "$test_root" where buildkite-packages:mise-smoke-named@1.0.0)"
+[[ "$(cat "$named/bin/mise-smoke-named")" == "mise-smoke 1.0.0" ]]
 
 # A failed digest check must not create the final executable.
 fake_hash_bin="$test_root/fake-hash-bin"

@@ -125,9 +125,10 @@ local function request_headers(config, accept)
 end
 
 -- A Files package is identified by its name, version and variant, where the
--- variant is the published file's extension. Packagecloud-backed registries
--- predate variants and report none, leaving name and version unique on their
--- own, so there is nothing to select against.
+-- variant is the published file's extension. A Files registry is backed either
+-- natively or by Packagecloud, and only the native one reports a variant, so on
+-- a Packagecloud-backed registry name and version are unique on their own and
+-- there is nothing to select against.
 local function variant_matches(item, extension)
     return extension == nil or item.variant == nil or item.variant == extension
 end
@@ -212,32 +213,46 @@ function M.config(ctx)
     }
 end
 
-function M.filename(ctx, config, pkg)
+-- The configured exact filename with its placeholders expanded, or nil when the
+-- config sets none.
+local function configured_filename(ctx, config)
     local options = ctx.options or {}
-    local version = required_string(ctx.version, "Version")
-    local filename
+    if options.filename == nil then
+        return nil
+    end
 
-    if options.filename then
-        filename = expand(options.filename, {
-            ["{tool}"] = config.platform_replacements["{tool}"],
-            ["{os}"] = config.platform_replacements["{os}"],
-            ["{arch}"] = config.platform_replacements["{arch}"],
-            ["{exe_ext}"] = config.platform_replacements["{exe_ext}"],
-            ["{package}"] = config.package_name,
-            ["{version}"] = version,
-        }, "Filename")
-    else
-        -- Files registries require the {BASENAME}-{SEMVER}.{EXT} naming
-        -- convention and report the extension back as the package variant, so
-        -- an unambiguous package describes its own filename.
-        local extension = config.extension or pkg.variant
-        if type(extension) ~= "string" or extension == "" then
-            error(
-                "This registry does not report a package variant, so set filename or "
-                    .. "extension to construct the package download URL"
-            )
-        end
-        filename = config.package_name .. "-" .. version .. "." .. extension
+    local replacements = {
+        ["{package}"] = config.package_name,
+        ["{version}"] = required_string(ctx.version, "Version"),
+    }
+    for placeholder, replacement in pairs(config.platform_replacements) do
+        replacements[placeholder] = replacement
+    end
+
+    return expand(options.filename, replacements, "Filename")
+end
+
+-- Files registries require the {BASENAME}-{SEMVER}.{EXT} naming convention and
+-- report the extension back as the package variant, so a variant names the
+-- published file.
+local function variant_filename(config, version, variant)
+    if type(variant) ~= "string" or variant == "" then
+        return nil
+    end
+
+    return config.package_name .. "-" .. version .. "." .. variant
+end
+
+function M.filename(ctx, config, pkg)
+    local version = required_string(ctx.version, "Version")
+    local filename = configured_filename(ctx, config)
+        or variant_filename(config, version, config.extension or pkg.variant)
+
+    if not filename then
+        error(
+            "This registry does not report a package variant, so set filename or "
+                .. "extension to construct the package download URL"
+        )
     end
 
     if filename == "." or filename == ".." or filename:find("[/\\]") then
@@ -310,21 +325,38 @@ function M.find_package(ctx)
     end
 
     -- Selecting one of these arbitrarily would download the requested file and
-    -- verify it against another variant's digest.
+    -- verify it against another variant's digest. An exact filename already
+    -- names one of them; anything else has to be told which to take.
     if #matches > 1 then
-        error(
-            "Package "
-                .. config.package_name
-                .. "@"
-                .. version
-                .. " has several variants in "
-                .. config.organization
-                .. "/"
-                .. config.registry
-                .. " ("
-                .. variant_list(matches)
-                .. "). Set extension to choose one."
-        )
+        local filename = configured_filename(ctx, config)
+        local named = {}
+        for _, item in ipairs(matches) do
+            if filename and variant_filename(config, version, item.variant) == filename then
+                table.insert(named, item)
+            end
+        end
+
+        if #named ~= 1 then
+            error(
+                "Package "
+                    .. config.package_name
+                    .. "@"
+                    .. version
+                    .. " has several variants in "
+                    .. config.organization
+                    .. "/"
+                    .. config.registry
+                    .. " ("
+                    .. variant_list(matches)
+                    .. ")."
+                    .. (
+                        filename and (" No variant is named " .. filename .. ".")
+                        or " Set extension to choose one."
+                    )
+            )
+        end
+
+        return named[1], config
     end
 
     return matches[1], config
