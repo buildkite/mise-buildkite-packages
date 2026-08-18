@@ -166,8 +166,8 @@ CI runs the same task in the public
 pipeline on the Open Source cluster. It configures no credentials: inside a
 Buildkite job the plugin exchanges an agent OIDC token for registry access, so
 `buildkite/test-files` carries a `read_packages` OIDC policy for this pipeline.
-Fork builds are disabled, because a fork's pipeline steps could otherwise mint
-that token.
+Builds from forks start with a block step, because a fork's pull request can
+rewrite these steps and so mint that token.
 
 ## License
 
