@@ -22,10 +22,13 @@ registry = "test-files"
 filename = "README.md"
 EOF
 
+export MISE_CACHE_DIR="$test_root/cache"
+export MISE_CONFIG_DIR="$test_root/config"
 export MISE_DATA_DIR="$test_root/data"
-mise plugins link --force buildkite-packages "$repo_root"
-mise trust --yes "$test_root/mise.toml" >/dev/null
+export MISE_STATE_DIR="$test_root/state"
+export MISE_TRUSTED_CONFIG_PATHS="$test_root"
 
+mise -C "$test_root" plugins link --force buildkite-packages "$repo_root"
 versions="$(mise -C "$test_root" ls-remote buildkite-packages:README.md)"
 [[ "$versions" == "0.0.0" ]]
 
@@ -33,5 +36,6 @@ mise -C "$test_root" install --yes buildkite-packages:README.md@0.0.0
 installed="$(mise -C "$test_root" where buildkite-packages:README.md@0.0.0)"
 [[ "$(cat "$installed/bin/README.md")" == "Hello, world!" ]]
 [[ -x "$installed/bin/README.md" ]]
+[[ "$(mise -C "$test_root" which README.md)" == "$installed/bin/README.md" ]]
 
 echo "smoke test passed"

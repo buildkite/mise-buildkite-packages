@@ -144,6 +144,16 @@ The Buildkite mise plugin also downloads mise itself from GitHub on a cold
 cache. Fully GitHub-independent CI therefore needs a preinstalled mise binary
 or a configurable non-GitHub bootstrap source as well.
 
+## Development
+
+The smoke test uses an isolated mise data/config/cache/state directory and the
+`buildkite/test-files` registry. It authenticates with the token environment
+variables above or the local `bk` CLI:
+
+```sh
+mise run test
+```
+
 ## License
 
 MIT
