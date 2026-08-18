@@ -16,6 +16,7 @@ function PLUGIN:BackendListVersions(ctx)
         error(
             "No versions of "
                 .. config.package_name
+                .. (config.extension and (" with extension " .. config.extension) or "")
                 .. " were found in "
                 .. config.organization
                 .. "/"
