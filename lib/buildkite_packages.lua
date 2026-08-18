@@ -273,41 +273,14 @@ function M.find_package(ctx)
 end
 
 function M.download(config, filename, destination)
-    local url = config.audience .. "/files/" .. url_encode(filename)
-    local token = token_for(config)
-    if not token:match("^[%w%-%._~%+/=]+$") then
-        error("Buildkite Packages authentication token contains unsupported characters")
-    end
-
-    -- mise's http.download_file receives a 403 after following the Files
-    -- endpoint's redirect to its signed CloudFront URL. curl succeeds and does
-    -- not forward this origin-scoped OAuth credential across hosts. Feeding the
-    -- config on stdin also keeps the token out of curl's process arguments.
-    local windows = RUNTIME.osType:lower() == "windows"
-    local config_command
-    if windows then
-        config_command = 'echo oauth2-bearer = "%MISE_BUILDKITE_PACKAGES_AUTH_TOKEN%"'
-    else
-        config_command = "printf 'oauth2-bearer = \"%s\"\\n' \"$MISE_BUILDKITE_PACKAGES_AUTH_TOKEN\""
-    end
-
-    local command = config_command
-        .. " | "
-        .. (windows and "curl.exe" or "curl")
-        .. " --config - --fail --silent --show-error --location --create-dirs"
-        .. " --user-agent "
-        .. M.command_quote("mise-buildkite-packages/" .. PLUGIN.version)
-        .. " --output "
-        .. M.command_quote(destination)
-        .. " "
-        .. M.command_quote(url)
-
-    local ok, download_error = pcall(cmd.exec, command, {
-        env = { MISE_BUILDKITE_PACKAGES_AUTH_TOKEN = token },
-    })
-    if not ok then
-        error("Could not download Buildkite package: " .. download_error)
-    end
+    -- reqwest adds the source URL as Referer when following the download
+    -- redirect. The query suffix avoids an AWS LFI_HEADER false positive for
+    -- filenames such as README.md and is ignored by the Files endpoint.
+    local url = config.audience .. "/files/" .. url_encode(filename) .. "?source=mise"
+    http.download_file({
+        url = url,
+        headers = request_headers(config, "application/octet-stream"),
+    }, destination)
 end
 
 function M.verify_sha256(pkg, destination)

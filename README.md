@@ -8,8 +8,7 @@ The plugin uses the Buildkite Packages REST API to list package versions and the
 registry's authenticated `/files/{filename}` endpoint to install the selected
 version. It supports raw executables and `.zip`, `.tar.gz`, `.tar.xz`, and
 `.tar.bz2` archives, and verifies downloads against the SHA-256 digest returned
-by the API. `curl` is required for downloads; credentials are passed through
-its standard input rather than process arguments.
+by the API.
 
 ## Try the local checkout
 
