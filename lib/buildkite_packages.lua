@@ -1,5 +1,4 @@
 local cmd = require("cmd")
-local file = require("file")
 local http = require("http")
 local json = require("json")
 
@@ -36,7 +35,9 @@ end
 local function expand(value, replacements, description)
     required_string(value, description)
     for placeholder, replacement in pairs(replacements) do
-        value = value:gsub(placeholder, replacement)
+        value = value:gsub(placeholder, function()
+            return replacement
+        end)
     end
 
     local unknown = value:match("({[^}]+})")
@@ -75,37 +76,6 @@ local function command_quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
-local function mise_managed_bk_token()
-    local data_dir = os.getenv("MISE_DATA_DIR")
-    if not data_dir or data_dir == "" then
-        local xdg_data_home = os.getenv("XDG_DATA_HOME")
-        if xdg_data_home and xdg_data_home ~= "" then
-            data_dir = file.join_path(xdg_data_home, "mise")
-        else
-            local home = os.getenv("HOME") or os.getenv("USERPROFILE")
-            if not home or home == "" then
-                return nil
-            end
-            data_dir = file.join_path(home, ".local", "share", "mise")
-        end
-    end
-
-    for _, relative_path in ipairs({
-        { "installs", "github-buildkite-cli", "latest", "bk" },
-        { "installs", "github-buildkite-cli", "latest", "bin", "bk" },
-    }) do
-        local candidate = file.join_path(data_dir, unpack(relative_path))
-        if file.exists(candidate) then
-            local token = command_token(command_quote(candidate) .. " auth token")
-            if token then
-                return token
-            end
-        end
-    end
-
-    return nil
-end
-
 local function token_for(config)
     if cached_token then
         return cached_token, cached_token_source
@@ -131,7 +101,7 @@ local function token_for(config)
         end
     end
 
-    local token = command_token("bk auth token") or mise_managed_bk_token()
+    local token = command_token("bk auth token")
     if token then
         cached_token = token
         cached_token_source = "bk auth token"
@@ -150,7 +120,7 @@ local function request_headers(config, accept)
     return {
         ["Accept"] = accept,
         ["Authorization"] = "Bearer " .. token,
-        ["User-Agent"] = "mise-buildkite-packages/0.1.0 (auth: " .. source .. ")",
+        ["User-Agent"] = "mise-buildkite-packages/" .. PLUGIN.version .. " (auth: " .. source .. ")",
     }
 end
 
@@ -304,31 +274,32 @@ end
 function M.download(config, filename, destination)
     local url = config.audience .. "/files/" .. url_encode(filename)
     local token = token_for(config)
-    local command
-
-    if RUNTIME.osType:lower() == "windows" then
-        local function quote(value)
-            return '"' .. value:gsub('"', '\\"') .. '"'
-        end
-
-        command = "curl.exe --fail --silent --show-error --location --create-dirs"
-            .. ' --oauth2-bearer "%MISE_BUILDKITE_PACKAGES_AUTH_TOKEN%"'
-            .. " --output "
-            .. quote(destination)
-            .. " "
-            .. quote(url)
-    else
-        local function quote(value)
-            return "'" .. value:gsub("'", "'\\''") .. "'"
-        end
-
-        command = "curl --fail --silent --show-error --location --create-dirs"
-            .. ' --oauth2-bearer "$MISE_BUILDKITE_PACKAGES_AUTH_TOKEN"'
-            .. " --output "
-            .. quote(destination)
-            .. " "
-            .. quote(url)
+    if not token:match("^[%w%-%._~%+/=]+$") then
+        error("Buildkite Packages authentication token contains unsupported characters")
     end
+
+    -- mise's http.download_file receives a 403 after following the Files
+    -- endpoint's redirect to its signed CloudFront URL. curl succeeds and does
+    -- not forward this origin-scoped OAuth credential across hosts. Feeding the
+    -- config on stdin also keeps the token out of curl's process arguments.
+    local windows = RUNTIME.osType:lower() == "windows"
+    local config_command
+    if windows then
+        config_command = 'echo oauth2-bearer = "%MISE_BUILDKITE_PACKAGES_AUTH_TOKEN%"'
+    else
+        config_command = "printf 'oauth2-bearer = \"%s\"\\n' \"$MISE_BUILDKITE_PACKAGES_AUTH_TOKEN\""
+    end
+
+    local command = config_command
+        .. " | "
+        .. (windows and "curl.exe" or "curl")
+        .. " --config - --fail --silent --show-error --location --create-dirs"
+        .. " --user-agent "
+        .. command_quote("mise-buildkite-packages/" .. PLUGIN.version)
+        .. " --output "
+        .. command_quote(destination)
+        .. " "
+        .. command_quote(url)
 
     local ok, download_error = pcall(cmd.exec, command, {
         env = { MISE_BUILDKITE_PACKAGES_AUTH_TOKEN = token },
@@ -338,8 +309,8 @@ function M.download(config, filename, destination)
     end
 end
 
-function M.verify_sha256(package, destination)
-    local expected = package.digests and package.digests.sha256
+function M.verify_sha256(pkg, destination)
+    local expected = pkg.digests and pkg.digests.sha256
     if type(expected) ~= "string" or #expected ~= 64 or not expected:match("^%x+$") then
         error("Buildkite Packages API response did not include a valid SHA-256 digest")
     end

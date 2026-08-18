@@ -8,7 +8,8 @@ The plugin uses the Buildkite Packages REST API to list package versions and the
 registry's authenticated `/files/{filename}` endpoint to install the selected
 version. It supports raw executables and `.zip`, `.tar.gz`, `.tar.xz`, and
 `.tar.bz2` archives, and verifies downloads against the SHA-256 digest returned
-by the API. `curl` is required for downloads.
+by the API. `curl` is required for downloads; credentials are passed through
+its standard input rather than process arguments.
 
 ## Try the local checkout
 
@@ -101,11 +102,19 @@ whose audience is the registry's canonical URL:
 https://packages.buildkite.com/{organization}/{registry}
 ```
 
+The `bk` fallback requires `bk` to be on the backend hook's `PATH`. If a local
+mise configuration manages `bk` but does not expose it there, export its token
+for the install instead:
+
+```sh
+BUILDKITE_PACKAGES_TOKEN="$(bk auth token)" mise install
+```
+
 ## Making the plugin available
 
 Vendoring this small plugin in the consuming repository removes a network
-bootstrap dependency. Mise releases containing the local-plugin fix from
-[mise#11487](https://github.com/jdx/mise/pull/11487) can link it during
+bootstrap dependency. Mise 2026.7.18 and newer contain the local-plugin fix from
+[mise#11487](https://github.com/jdx/mise/pull/11487), so they can link it during
 `mise install`:
 
 ```toml
@@ -113,8 +122,7 @@ bootstrap dependency. Mise releases containing the local-plugin fix from
 buildkite-packages = "./vendor/mise-buildkite-packages"
 ```
 
-Older versions, including mise 2026.6.12 currently used by Buildkite's
-`mise#v1.1.3` plugin, need an explicit link before installation:
+Older versions need an explicit link before installation:
 
 ```sh
 mise plugins link --force buildkite-packages ./vendor/mise-buildkite-packages
@@ -126,12 +134,12 @@ bake the backend into the agent image under
 `$MISE_DATA_DIR/plugins/buildkite-packages`, upgrade mise and vendor the plugin,
 or add backend-plugin bootstrapping to the Buildkite mise plugin.
 
-Once this prototype has a hosted Git repository, consumers that accept a Git
-bootstrap dependency can use its URL instead:
+Once this prototype is published, consumers that accept a Git bootstrap
+dependency can pin its repository and tag instead:
 
 ```toml
 [plugins]
-buildkite-packages = "https://example.com/buildkite/mise-buildkite-packages.git"
+buildkite-packages = "https://github.com/buildkite/mise-buildkite-packages.git#v0.1.0"
 ```
 
 In `buildkite/buildkite`, mise currently resolves the root

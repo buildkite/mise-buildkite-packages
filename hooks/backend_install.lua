@@ -16,7 +16,7 @@ function PLUGIN:BackendInstall(ctx)
     local file = require("file")
     local packages = dofile(RUNTIME.pluginDirPath .. "/lib/buildkite_packages.lua")
 
-    local package, config = packages.find_package(ctx)
+    local pkg, config = packages.find_package(ctx)
     local filename = packages.filename(ctx, config)
     local extract = config.extract
     if extract == nil then
@@ -30,14 +30,20 @@ function PLUGIN:BackendInstall(ctx)
 
         local download_path = file.join_path(ctx.download_path, filename)
         packages.download(config, filename, download_path)
-        packages.verify_sha256(package, download_path)
+        packages.verify_sha256(pkg, download_path)
         archiver.decompress(download_path, ctx.install_path, {
             strip_components = config.strip_components,
         })
     else
         local installed_file = file.join_path(ctx.install_path, "bin", config.bin)
-        packages.download(config, filename, installed_file)
-        packages.verify_sha256(package, installed_file)
+        local staged_file = installed_file .. ".download"
+        packages.download(config, filename, staged_file)
+        packages.verify_sha256(pkg, staged_file)
+
+        local moved, move_error = os.rename(staged_file, installed_file)
+        if not moved then
+            error("Could not finalize downloaded package: " .. move_error)
+        end
 
         if RUNTIME.osType:lower() ~= "windows" then
             cmd.exec("chmod 0755 " .. shell_quote(installed_file))

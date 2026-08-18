@@ -19,7 +19,17 @@ experimental = true
 version = "0.0.0"
 organization = "buildkite"
 registry = "test-files"
-filename = "README.md"
+package = "README.md"
+filename = "{package}"
+
+# The percent sign verifies placeholder replacements are treated literally.
+[tools."buildkite-packages:README%mismatch"]
+version = "0.0.0"
+organization = "buildkite"
+registry = "test-files"
+package = "README.md"
+filename = "{package}"
+bin = "{tool}"
 EOF
 
 export MISE_CACHE_DIR="$test_root/cache"
@@ -37,5 +47,28 @@ installed="$(mise -C "$test_root" where buildkite-packages:README.md@0.0.0)"
 [[ "$(cat "$installed/bin/README.md")" == "Hello, world!" ]]
 [[ -x "$installed/bin/README.md" ]]
 [[ "$(mise -C "$test_root" which README.md)" == "$installed/bin/README.md" ]]
+
+# A failed digest check must not create the final executable.
+fake_hash_bin="$test_root/fake-hash-bin"
+mkdir -p "$fake_hash_bin"
+for hasher in shasum sha256sum; do
+  cat >"$fake_hash_bin/$hasher" <<'EOF'
+#!/bin/sh
+printf '%064d  %s\n' 0 "${3:-$1}"
+EOF
+  chmod +x "$fake_hash_bin/$hasher"
+done
+
+if mismatch_output="$(
+  PATH="$fake_hash_bin:$PATH" mise -C "$test_root" install --yes 'buildkite-packages:README%mismatch@0.0.0' 2>&1
+)"; then
+  echo "expected installation with a mismatched SHA-256 digest to fail" >&2
+  exit 1
+fi
+[[ "$mismatch_output" == *"SHA-256 digest did not match"* ]]
+if find "$MISE_DATA_DIR/installs" -type f -name 'README%mismatch' -print -quit | grep -q .; then
+  echo "unverified download was moved to its final executable path" >&2
+  exit 1
+fi
 
 echo "smoke test passed"
