@@ -1,0 +1,6 @@
+[settings]
+experimental = true
+
+[tasks.test]
+description = "Run the authenticated test-registry smoke test"
+run = "./test/smoke"

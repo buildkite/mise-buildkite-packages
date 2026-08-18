@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+test_root="$(mktemp -d)"
+trap 'rm -rf "$test_root"' EXIT
+
+token="${BUILDKITE_PACKAGES_TOKEN:-${BUILDKITE_API_TOKEN:-}}"
+if [[ -z "$token" ]]; then
+  token="$(bk auth token)"
+fi
+export BUILDKITE_PACKAGES_TOKEN="$token"
+
+cat >"$test_root/mise.toml" <<'EOF'
+[settings]
+experimental = true
+
+[tools."buildkite-packages:README.md"]
+version = "0.0.0"
+organization = "buildkite"
+registry = "test-files"
+filename = "README.md"
+EOF
+
+export MISE_DATA_DIR="$test_root/data"
+mise plugins link --force buildkite-packages "$repo_root"
+mise trust --yes "$test_root/mise.toml" >/dev/null
+
+versions="$(mise -C "$test_root" ls-remote buildkite-packages:README.md)"
+[[ "$versions" == "0.0.0" ]]
+
+mise -C "$test_root" install --yes buildkite-packages:README.md@0.0.0
+installed="$(mise -C "$test_root" where buildkite-packages:README.md@0.0.0)"
+[[ "$(cat "$installed/bin/README.md")" == "Hello, world!" ]]
+[[ -x "$installed/bin/README.md" ]]
+
+echo "smoke test passed"
