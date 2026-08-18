@@ -162,6 +162,14 @@ variables above or the local `bk` CLI:
 mise run test
 ```
 
+CI runs the same task in the public
+[mise-buildkite-packages](https://buildkite.com/buildkite/mise-buildkite-packages)
+pipeline on the Open Source cluster. It configures no credentials: inside a
+Buildkite job the plugin exchanges an agent OIDC token for registry access, so
+`buildkite/test-files` carries a `read_packages` OIDC policy for this pipeline.
+Fork builds are disabled, because a fork's pipeline steps could otherwise mint
+that token.
+
 ## License
 
 MIT

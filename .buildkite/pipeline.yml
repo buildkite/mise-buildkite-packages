@@ -1,0 +1,8 @@
+agents:
+  queue: hosted
+
+steps:
+  - label: ":mise: test"
+    command: mise run test
+    plugins:
+      - mise#v1.1.5: ~

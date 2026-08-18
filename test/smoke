@@ -6,10 +6,14 @@ test_root="$(mktemp -d)"
 trap 'rm -rf "$test_root"' EXIT
 
 token="${BUILDKITE_PACKAGES_TOKEN:-${BUILDKITE_API_TOKEN:-}}"
-if [[ -z "$token" ]]; then
+if [[ -z "$token" && -z "${BUILDKITE_JOB_ID:-}" ]]; then
+  # Outside a Buildkite job there is no agent OIDC token, and the backend hook
+  # may not see a locally managed bk on its PATH, so resolve the token here.
   token="$(bk auth token)"
 fi
-export BUILDKITE_PACKAGES_TOKEN="$token"
+if [[ -n "$token" ]]; then
+  export BUILDKITE_PACKAGES_TOKEN="$token"
+fi
 
 cat >"$test_root/mise.toml" <<'EOF'
 [settings]
