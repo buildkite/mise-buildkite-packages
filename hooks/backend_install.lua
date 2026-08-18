@@ -6,10 +6,6 @@ local function archive_name(filename)
         or lower:match("%.tar%.bz2$")
 end
 
-local function shell_quote(value)
-    return "'" .. value:gsub("'", "'\\''") .. "'"
-end
-
 function PLUGIN:BackendInstall(ctx)
     local archiver = require("archiver")
     local cmd = require("cmd")
@@ -46,7 +42,7 @@ function PLUGIN:BackendInstall(ctx)
         end
 
         if RUNTIME.osType:lower() ~= "windows" then
-            cmd.exec("chmod 0755 " .. shell_quote(installed_file))
+            cmd.exec("chmod 0755 " .. packages.command_quote(installed_file))
         end
     end
 

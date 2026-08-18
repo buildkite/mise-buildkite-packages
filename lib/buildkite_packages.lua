@@ -68,7 +68,7 @@ local function command_token(command)
     return output
 end
 
-local function command_quote(value)
+function M.command_quote(value)
     if RUNTIME.osType:lower() == "windows" then
         return '"' .. value:gsub('"', '\\"') .. '"'
     end
@@ -245,6 +245,7 @@ function M.list_packages(ctx)
             end
         end
 
+        -- The Packages API emits cursor links in both the JSON body and Link header.
         url = data.links and data.links.next or nil
     end
 
@@ -295,11 +296,11 @@ function M.download(config, filename, destination)
         .. (windows and "curl.exe" or "curl")
         .. " --config - --fail --silent --show-error --location --create-dirs"
         .. " --user-agent "
-        .. command_quote("mise-buildkite-packages/" .. PLUGIN.version)
+        .. M.command_quote("mise-buildkite-packages/" .. PLUGIN.version)
         .. " --output "
-        .. command_quote(destination)
+        .. M.command_quote(destination)
         .. " "
-        .. command_quote(url)
+        .. M.command_quote(url)
 
     local ok, download_error = pcall(cmd.exec, command, {
         env = { MISE_BUILDKITE_PACKAGES_AUTH_TOKEN = token },
@@ -317,11 +318,11 @@ function M.verify_sha256(pkg, destination)
 
     local command
     if RUNTIME.osType:lower() == "windows" then
-        command = "certutil -hashfile " .. command_quote(destination) .. " SHA256"
+        command = "certutil -hashfile " .. M.command_quote(destination) .. " SHA256"
     elseif RUNTIME.osType:lower() == "darwin" then
-        command = "shasum -a 256 " .. command_quote(destination)
+        command = "shasum -a 256 " .. M.command_quote(destination)
     else
-        command = "sha256sum " .. command_quote(destination)
+        command = "sha256sum " .. M.command_quote(destination)
     end
 
     local ok, output = pcall(cmd.exec, command)
